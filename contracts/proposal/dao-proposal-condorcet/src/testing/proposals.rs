@@ -24,7 +24,7 @@ fn test_proposal_lifecycle_closed() {
             ("crimson", 10),
             ("turquoise", 10),
         ])
-        .with_proposal(2)
+        .with_proposal(3)
         .build();
 
     suite.vote("blue", 1, vec![0, 2, 1]).unwrap();
@@ -62,12 +62,11 @@ fn test_make_proposal() {
     let ProposalResponse { proposal, tally } = suite.query_proposal(id);
 
     assert_eq!(proposal.id, id);
-    assert_eq!(proposal.choices.len(), 2);
+    assert_eq!(proposal.choices.len(), 1);
     assert_eq!(proposal.choices[0].msgs[0], unimportant_message());
-    assert_eq!(proposal.choices[1].msgs, vec![]); // none-of-the-above added to the end.
 
-    assert_eq!(tally.candidates(), 2);
-    assert_eq!(tally.winner, Winner::None);
+    assert_eq!(tally.candidates(), 1);
+    assert_eq!(tally.winner, Winner::Undisputed((0)));
     assert_eq!(tally.power_outstanding, proposal.total_power);
     assert_eq!(tally.start_height, suite.block_height());
 }
@@ -88,7 +87,7 @@ fn test_no_propose_zero_voting_power() {
 
 #[test]
 fn test_proposal_lifeclyle_execution_failed() {
-    let mut suite = SuiteBuilder::default().with_proposal(1).build();
+    let mut suite = SuiteBuilder::default().with_proposal(2).build();
 
     suite.vote(suite.sender(), 1, vec![0, 1]).unwrap();
 
@@ -112,7 +111,7 @@ fn test_proposal_lifeclyle_execution_failed() {
 fn test_proposal_never_reaches_quorum() {
     let mut suite = SuiteBuilder::default()
         .with_voters(&[("pleb", 1), ("belp", 10)])
-        .with_proposal(2)
+        .with_proposal(3)
         .build();
 
     suite.vote("pleb", 1, vec![0, 2, 1]).unwrap();
@@ -129,7 +128,7 @@ fn test_proposal_never_reaches_quorum() {
 fn test_proposal_passes_after_expiry() {
     let mut suite = SuiteBuilder::default()
         .with_voters(&[("pleb", 15), ("belp", 85)])
-        .with_proposal(2)
+        .with_proposal(3)
         .build();
 
     suite.vote("pleb", 1, vec![0, 2, 1]).unwrap();
@@ -155,9 +154,9 @@ fn test_no_vote_after_expiry() {
 fn test_no_revoting() {
     let mut suite = SuiteBuilder::default().with_proposal(1).build();
 
-    suite.vote(suite.sender(), 1, vec![0, 1]).unwrap();
+    suite.vote(suite.sender(), 1, vec![0]).unwrap();
 
-    let err = suite.vote(suite.sender(), 1, vec![0, 1]);
+    let err = suite.vote(suite.sender(), 1, vec![0]);
     is_error!(err, &ContractError::Voted {}.to_string());
 }
 
@@ -224,7 +223,7 @@ fn test_proposal_set_config() {
 
     suite.a_day_passes();
 
-    suite.vote(suite.sender(), 1, vec![0, 1]).unwrap();
+    suite.vote(suite.sender(), 1, vec![0]).unwrap();
     suite.execute(suite.sender(), 1).unwrap();
 
     let new_config = suite.query_config();
@@ -233,7 +232,7 @@ fn test_proposal_set_config() {
     assert_eq!(new_config.min_voting_period, None);
     assert!(!new_config.close_proposals_on_execution_failure);
 
-    suite.vote(suite.sender(), 2, vec![0, 1]).unwrap();
+    suite.vote(suite.sender(), 2, vec![0]).unwrap();
     suite.execute(suite.sender(), 2).unwrap();
 
     let (_, status) = suite.query_winner_and_status(2);
@@ -246,7 +245,7 @@ fn test_execution_fail_handling() {
     suite.instantiate.close_proposals_on_execution_failure = false;
     let mut suite = suite.build();
 
-    suite.vote(suite.sender(), 1, vec![0, 1]).unwrap();
+    suite.vote(suite.sender(), 1, vec![0]).unwrap();
     // important that this errors the whole transaction to ensure that
     // no state changes get committed.
     suite.execute(suite.sender(), 1).unwrap_err();
