@@ -140,7 +140,11 @@ impl SuiteBuilder {
                 .propose(
                     &suite.sender(),
                     (0..candidates)
-                        .map(|_| vec![unimportant_message()])
+                        .map(|_| Choice {
+                            title: "title".to_string(),
+                            description: None,
+                            msgs: vec![unimportant_message()],
+                        })
                         .collect(),
                 )
                 .unwrap();
@@ -231,15 +235,13 @@ impl Suite {
     pub fn propose<S: Into<String>>(
         &mut self,
         sender: S,
-        choices: Vec<Vec<CosmosMsg>>,
+        choices: Vec<Choice>,
     ) -> anyhow::Result<u32> {
         let id = self.query_next_proposal_id();
         self.app.execute_contract(
             Addr::unchecked(sender),
             self.condorcet.clone(),
-            &ExecuteMsg::Propose {
-                choices: choices.into_iter().map(|msgs| Choice { msgs }).collect(),
-            },
+            &ExecuteMsg::Propose { choices },
             &[],
         )?;
         Ok(id)

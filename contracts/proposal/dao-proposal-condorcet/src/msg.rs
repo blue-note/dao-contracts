@@ -10,6 +10,8 @@ pub type InstantiateMsg = UncheckedConfig;
 #[cw_serde]
 pub struct Choice {
     pub msgs: Vec<CosmosMsg<Empty>>,
+    pub title: String,
+    pub description: Option<String>,
 }
 
 #[cw_serde]

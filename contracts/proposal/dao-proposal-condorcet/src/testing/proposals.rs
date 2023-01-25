@@ -3,7 +3,7 @@ use cw_utils::Duration;
 
 use crate::{
     config::UncheckedConfig,
-    msg::ExecuteMsg,
+    msg::{Choice, ExecuteMsg},
     proposal::{ProposalResponse, Status},
     tally::Winner,
     testing::suite::unimportant_message,
@@ -50,7 +50,14 @@ fn test_proposal_lifecycle_closed() {
 fn test_make_proposal() {
     let mut suite = SuiteBuilder::default().build();
     let id = suite
-        .propose(suite.sender(), vec![vec![unimportant_message()]])
+        .propose(
+            suite.sender(),
+            vec![Choice {
+                msgs: vec![unimportant_message()],
+                title: "title".to_string(),
+                description: None,
+            }],
+        )
         .unwrap();
     let ProposalResponse { proposal, tally } = suite.query_proposal(id);
 
@@ -169,18 +176,22 @@ fn test_proposal_set_config() {
     suite
         .propose(
             suite.sender(),
-            vec![vec![WasmMsg::Execute {
-                contract_addr: suite.condorcet.to_string(),
-                msg: to_binary(&ExecuteMsg::SetConfig(UncheckedConfig {
-                    quorum: config.quorum,
-                    voting_period: config.voting_period,
-                    min_voting_period: None,
-                    close_proposals_on_execution_failure: false,
-                }))
-                .unwrap(),
-                funds: vec![],
-            }
-            .into()]],
+            vec![Choice {
+                msgs: vec![WasmMsg::Execute {
+                    contract_addr: suite.condorcet.to_string(),
+                    msg: to_binary(&ExecuteMsg::SetConfig(UncheckedConfig {
+                        quorum: config.quorum,
+                        voting_period: config.voting_period,
+                        min_voting_period: None,
+                        close_proposals_on_execution_failure: false,
+                    }))
+                    .unwrap(),
+                    funds: vec![],
+                }
+                .into()],
+                title: "set config".to_string(),
+                description: None,
+            }],
         )
         .unwrap();
     // before passing the earlier one make another proposal who's
@@ -192,18 +203,22 @@ fn test_proposal_set_config() {
     suite
         .propose(
             suite.sender(),
-            vec![vec![WasmMsg::Execute {
-                contract_addr: suite.condorcet.to_string(),
-                msg: to_binary(&ExecuteMsg::SetConfig(UncheckedConfig {
-                    quorum: config.quorum,
-                    voting_period: config.voting_period,
-                    min_voting_period: Some(Duration::Height(10)),
-                    close_proposals_on_execution_failure: false,
-                }))
-                .unwrap(),
-                funds: vec![],
-            }
-            .into()]],
+            vec![Choice {
+                msgs: vec![WasmMsg::Execute {
+                    contract_addr: suite.condorcet.to_string(),
+                    msg: to_binary(&ExecuteMsg::SetConfig(UncheckedConfig {
+                        quorum: config.quorum,
+                        voting_period: config.voting_period,
+                        min_voting_period: Some(Duration::Height(10)),
+                        close_proposals_on_execution_failure: false,
+                    }))
+                    .unwrap(),
+                    funds: vec![],
+                }
+                .into()],
+                title: "title".to_string(),
+                description: None,
+            }],
         )
         .unwrap();
 
@@ -235,4 +250,66 @@ fn test_execution_fail_handling() {
     // important that this errors the whole transaction to ensure that
     // no state changes get committed.
     suite.execute(suite.sender(), 1).unwrap_err();
+}
+
+#[test]
+fn test_demonstrate_social_choice_energy_mix() {
+    // Here we instantiate a "multisig" wherein each voter has the
+    // same amount of influence over the outcome (voting power).
+    let mut suite = SuiteBuilder::default()
+        .with_voters(&[
+            ("normie", 1),
+            ("outcast", 1),
+            ("plebian", 1),
+            ("revolutionary", 1),
+        ])
+        .build();
+
+    let choices = vec![
+        Choice {
+            msgs: vec![],
+            title: "Nuclear fission".to_string(),
+            description: None,
+        },
+        Choice {
+            msgs: vec![],
+            title: "Solar power".to_string(),
+            description: None,
+        },
+        Choice {
+            msgs: vec![],
+            title: "Tesla megapack".to_string(),
+            description: None,
+        },
+    ];
+    // The proposal is to choose between three energy sources. Voters must rank the choices.
+    let id = suite.propose(suite.sender(), choices.clone()).unwrap();
+
+    // The normie votes for nuclear fission, tesla megapack, and then solar power.
+    suite.vote("normie", id, vec![0, 2, 1]).unwrap();
+
+    // The outcast votes for solar power, tesla megapack, and then nuclear fission.
+    suite.vote("outcast", id, vec![2, 0, 1]).unwrap();
+
+    // The plebian votes for solar power, nuclear fission, and then tesla megapack.
+    suite.vote("plebian", id, vec![0, 2, 1]).unwrap();
+
+    // The revolutionary votes for tesla megapack, nuclear fission, then solar power.
+    suite.vote("revolutionary", id, vec![0, 1, 2]).unwrap();
+
+    // Allow the proposal to expire.
+    suite.a_week_passes();
+
+    // A winner is chosen with the Condorcet's method.
+    // This finds the choice which beats all other choices in the majority of pairwise comparisons.
+    let (winner, status) = suite.query_winner_and_status(1);
+    assert_eq!(winner, Winner::Undisputed(0));
+    assert_eq!(status, Status::Passed { winner: 0 });
+    print!(
+        "{:?}",
+        choices
+            .iter()
+            .map(|c| c.title.as_str())
+            .collect::<Vec<&str>>()
+    );
 }

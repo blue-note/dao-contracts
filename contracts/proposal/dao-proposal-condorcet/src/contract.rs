@@ -118,10 +118,6 @@ fn execute_propose(
         return Err(ContractError::ZeroChoices {});
     }
 
-    let none_of_the_above = Choice { msgs: vec![] };
-    let mut choices = choices;
-    choices.push(none_of_the_above);
-
     let tally = Tally::new(
         choices.len() as u32,
         total_power,
