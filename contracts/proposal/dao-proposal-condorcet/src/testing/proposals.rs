@@ -304,11 +304,5 @@ fn test_demonstrate_social_choice_energy_mix() {
     let (winner, status) = suite.query_winner_and_status(1);
     assert_eq!(winner, Winner::Undisputed(0));
     assert_eq!(status, Status::Passed { winner: 0 });
-    print!(
-        "{:?}",
-        choices
-            .iter()
-            .map(|c| c.title.as_str())
-            .collect::<Vec<&str>>()
-    );
+    println!("The winner is: {:?}", choices[0].title);
 }
